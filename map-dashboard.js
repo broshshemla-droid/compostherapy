@@ -1,9 +1,11 @@
 // Fixed coordinates for demo purposes – later can be joined with address data.
 const BASE_COORDS = [32.2285, 34.9814]; // Tzur Yigal, Israel
 
-// Google Sheets CSV URL (published to web for direct CORS-friendly loading)
+// Google Sheets CSV URL (export format) via cors-anywhere proxy
+// Note: you may need to visit https://cors-anywhere.herokuapp.com/corsdemo
+// to enable temporary access.
 const DEFAULT_SHEET_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_4sQSebaYE0EWGcTNqJVNg87iJRpffiwmqUV2Xf8CPYqGD3yN5HS2pyx_5t0GT83y5zaD4GVJ0WuW/pub?gid=0&single=true&output=csv";
+  "https://cors-anywhere.herokuapp.com/https://docs.google.com/spreadsheets/d/1L21iZ5TVPOg29OHSR9pmDQq80FV6W46_wmJBZdoeJV8/export?format=csv&gid=0";
 
 /**
  * Return a CSV URL from runtime config if provided.
