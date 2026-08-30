@@ -238,6 +238,7 @@ function animateStatNumber(elementId, targetValue) {
  * Initialize the Leaflet map, load CSV data, add markers + legend.
  */
 async function initMapDashboard() {
+  console.log("DEBUG: initMapDashboard started");
   const map = L.map("map").setView(BASE_COORDS, 15);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -262,6 +263,7 @@ async function initMapDashboard() {
     // If loading fails, keep the map centered on base coords.
     console.error("Failed to load CSV data", error);
   }
+  console.log("DEBUG: CSV loading finished, rows count:", rows.length);
 
   const bounds = [];
   let sitesActive = 0;
@@ -426,6 +428,11 @@ async function initMapDashboard() {
     map.fitBounds(bounds, { padding: [40, 40] });
   }
 
+  // Draw daily waste collection zones
+  console.log("DEBUG: Calling drawWasteZones");
+  drawWasteZones(map);
+  console.log("DEBUG: initMapDashboard finished successfully");
+
   // Simple legend control in the bottom-right corner.
   const legend = L.control({ position: "bottomright" });
 
@@ -451,6 +458,14 @@ async function initMapDashboard() {
         <span class="legend-color" style="background-color: transparent; border: 2.5px solid #2563eb; box-sizing: border-box;"></span>
         <span>מסגרת כחולה – מעוניין בעוד עלים (פחמן)</span>
       </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background-color: transparent; border: 1.8px solid #1e293b; border-radius: 2px; box-sizing: border-box;"></span>
+        <span>קו שחור – מתחמי גזם בשאר הימים</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background-color: transparent; border: 3px solid #7c3aed; border-radius: 2px; box-sizing: border-box;"></span>
+        <span>קו צבעוני עבה – המתחם הפעיל היום</span>
+      </div>
     `;
     return div;
   };
@@ -459,4 +474,104 @@ async function initMapDashboard() {
 }
 
 document.addEventListener("DOMContentLoaded", initMapDashboard);
+
+const ZONE_COLORS = {
+  "Sunday": "#16a34a",     // Green
+  "Monday": "#2563eb",     // Blue
+  "Tuesday": "#ea580c",    // Orange
+  "Wednesday": "#7c3aed",  // Purple
+  "Thursday": "#dc2626"    // Red
+};
+
+const HEBREW_DAYS = {
+  "Sunday": "יום א'",
+  "Monday": "יום ב'",
+  "Tuesday": "יום ג'",
+  "Wednesday": "יום ד'",
+  "Thursday": "יום ה'"
+};
+
+function drawWasteZones(map) {
+  console.log("DEBUG: drawWasteZones function entered");
+  if (typeof WASTE_ZONES === "undefined") {
+    console.error("DEBUG: WASTE_ZONES is UNDEFINED! Check if waste-zones.js is correctly loaded in index.html");
+    return;
+  }
+  console.log("DEBUG: WASTE_ZONES is defined. Keys:", Object.keys(WASTE_ZONES));
+
+  const DAYS_MAP = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  
+  // Support simulating a day via URL query param: ?day=Wednesday or ?day=3
+  const urlParams = new URLSearchParams(window.location.search);
+  const dayParam = urlParams.get('day');
+  
+  let todayIndex = new Date().getDay();
+  if (dayParam) {
+    const parsedDay = parseInt(dayParam, 10);
+    if (!isNaN(parsedDay) && parsedDay >= 0 && parsedDay <= 6) {
+      todayIndex = parsedDay;
+    } else {
+      const foundIdx = DAYS_MAP.findIndex(d => d.toLowerCase() === dayParam.toLowerCase());
+      if (foundIdx !== -1) {
+        todayIndex = foundIdx;
+      }
+    }
+  }
+
+  const todayName = DAYS_MAP[todayIndex];
+  const isWeekend = todayIndex === 5 || todayIndex === 6; // Friday or Saturday
+
+  // Update header text
+  const activeDayNameEl = document.getElementById("active-day-name");
+  if (activeDayNameEl) {
+    if (isWeekend) {
+      activeDayNameEl.textContent = "אין פינוי בסופ\"ש";
+      activeDayNameEl.className = "font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md";
+    } else {
+      activeDayNameEl.textContent = HEBREW_DAYS[todayName] || todayName;
+      activeDayNameEl.className = "font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-md";
+    }
+  }
+
+  // Draw polygons
+  for (const [day, polygons] of Object.entries(WASTE_ZONES)) {
+    const color = ZONE_COLORS[day] || "#64748b";
+    const isActive = day === todayName;
+
+    // Style options based on active day / weekend
+    let style;
+    if (isWeekend) {
+      style = {
+        color: "#1e293b",
+        weight: 1.8,
+        opacity: 0.5,
+        fill: false
+      };
+    } else if (isActive) {
+      style = {
+        color: color,
+        weight: 3.8,
+        opacity: 0.9,
+        fill: false
+      };
+    } else {
+      style = {
+        color: "#1e293b",
+        weight: 1.8,
+        opacity: 0.5,
+        fill: false
+      };
+    }
+
+    polygons.forEach((coords) => {
+      const polygon = L.polygon(coords, style);
+      
+      const tooltipText = `מתחם הוצאת גזם: ${HEBREW_DAYS[day]}` + 
+                          (isActive ? " (פעיל היום!)" : "");
+      polygon.bindTooltip(tooltipText, { sticky: true, direction: "top" });
+      
+      polygon.addTo(map);
+    });
+  }
+}
 

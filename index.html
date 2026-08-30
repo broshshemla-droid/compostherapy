@@ -71,9 +71,12 @@
           </p>
         </div>
         <div class="hidden sm:flex flex-col items-end text-xs text-slate-500">
-          <span>סטטוס לפי צבע:</span>
-          <span class="mt-1">
-            A = ירוק · B = צהוב · C = אדום
+          <div class="flex items-center gap-1.5 font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md" id="active-day-indicator">
+            <span>הוצאת גזם היום:</span>
+            <span id="active-day-name" class="font-bold text-emerald-600">טוען...</span>
+          </div>
+          <span class="mt-1.5 text-[0.7rem] text-slate-400">
+            סטטוס קומפוסטרים: A = ירוק · B = צהוב · C = אדום
           </span>
         </div>
       </div>
@@ -169,6 +172,9 @@
       // window.COMPOST_CSV_TEXT = `id,resident_name,lat,long,status,sub_status,carbon_level,phone
       // CO-001,דוגמה,32.2285,34.9814,A,Thermophilic,4,0501234567`;
     </script>
+
+    <!-- Waste Zones Data -->
+    <script src="./waste-zones.js"></script>
 
     <!-- App logic -->
     <script src="./map-dashboard.js"></script>
