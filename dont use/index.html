@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>קומפוסתרפיה - צור יגאל כוכב יאיר</title>
+
+    <!-- Tailwind CSS (CDN for simplicity) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+
+    <!-- Page-specific styles -->
+    <style>
+      #map {
+        height: calc(100vh - 165px); /* full height minus compact header + stats */
+      }
+
+      .legend {
+        background: white;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        font-size: 0.75rem;
+        line-height: 1.25rem;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 9999px;
+      }
+
+      .leaflet-popup-content {
+        width: 400px;
+        margin: 0;
+      }
+    </style>
+  </head>
+
+  <body class="bg-slate-100 text-slate-900">
+    <!-- Header -->
+    <header
+      class="w-full bg-white shadow-sm border-b border-slate-200 sticky top-0 z-20"
+    >
+      <div
+        class="mx-auto max-w-5xl px-4 py-2 flex items-center justify-between gap-3"
+      >
+        <div>
+          <h1 class="text-lg md:text-xl font-semibold text-slate-800">
+            קומפוסתרפיה - צור יגאל כוכב יאיר
+          </h1>
+          <p class="text-[0.7rem] md:text-xs text-slate-500 mt-0.5">
+            לוח בקרה לפיילוט הקומפוסט בשכונה
+          </p>
+        </div>
+        <div class="hidden sm:flex flex-col items-end text-xs text-slate-500">
+          <span>סטטוס לפי צבע:</span>
+          <span class="mt-1">
+            A = ירוק · B = צהוב · C = אדום
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="mx-auto max-w-5xl px-4 pb-6">
+      <!-- Stats header - compact for single-screen view -->
+      <section class="mt-2">
+        <div
+          class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3"
+          aria-label="Compost pilot statistics"
+        >
+          <!-- Sites Active -->
+          <div
+            class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between"
+          >
+            <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
+              אתרים פעילים
+            </div>
+            <div
+              id="stats-sites-active"
+              class="mt-0.5 text-xl md:text-2xl font-semibold text-slate-800"
+            >
+              0
+            </div>
+            <div class="mt-0.5 text-[0.65rem] text-slate-400">
+              מספר נקודות קומפוסט פעילות במפה
+            </div>
+          </div>
+
+          <!-- Total Kitchen Waste -->
+          <div
+            class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between"
+          >
+            <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
+              פסולת מטבח שנחסכה (ק&quot;ג)
+            </div>
+            <div
+              id="stats-kitchen-total"
+              class="mt-0.5 text-xl md:text-2xl font-semibold text-orange-500"
+            >
+              0
+            </div>
+            <div class="mt-0.5 text-[0.65rem] text-slate-400">
+              סך כל פסולת המטבח שנחסכה בזכות הקומפוסטרים
+            </div>
+          </div>
+
+          <!-- Total Garden Waste -->
+          <div
+            class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between"
+          >
+            <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
+              פסולת גינה שנחסכה (ק&quot;ג)
+            </div>
+            <div
+              id="stats-garden-total"
+              class="mt-0.5 text-xl md:text-2xl font-semibold text-emerald-600"
+            >
+              0
+            </div>
+            <div class="mt-0.5 text-[0.65rem] text-slate-400">
+              סך כל פסולת הגינה שנחסכה בזכות הקומפוסטרים
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Map card -->
+      <section
+        class="mt-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+      >
+        <!-- Map container -->
+        <div id="map" class="w-full"></div>
+      </section>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <!-- Runtime config (optional) -->
+    <script>
+      // Optional override (defaults to the published CSV URL in map-dashboard.js):
+      // window.COMPOST_CSV_URL =
+      //   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_4sQSebaYE0EWGcTNqJVNg87iJRpffiwmqUV2Xf8CPYqGD3yN5HS2pyx_5t0GT83y5zaD4GVJ0WuW/pub?gid=0&single=true&output=csv";
+
+      // Optional inline mode (no fetch/CORS at all):
+      // window.COMPOST_CSV_TEXT = `id,resident_name,lat,long,status,sub_status,carbon_level,phone
+      // CO-001,דוגמה,32.2285,34.9814,A,Thermophilic,4,0501234567`;
+    </script>
+
+    <!-- App logic -->
+    <script src="./map-dashboard.js"></script>
+  </body>
+</html>
+
