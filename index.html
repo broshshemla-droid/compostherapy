@@ -3,149 +3,1131 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>קומפוסתרפיה - צור יגאל כוכב יאיר</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#15803d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="קומפוסתרפיה" />
+  <title>קומפוסתרפיה - מערך הקומפוסטציה היישובי</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%2315803d'/><text x='96' y='130' font-size='108' text-anchor='middle'>🌱</text></svg>" />
 
-  <!-- Tailwind CSS (CDN for simplicity) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
-  <!-- Page-specific styles -->
+  <!-- Google Fonts - Heebo -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
   <style>
-    #map {
-      height: calc(100vh - 165px);
-      /* full height minus compact header + stats */
+    body {
+      font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Map sizing per view */
+    .map-container {
+      height: 440px;
+      width: 100%;
+      z-index: 10;
+    }
+
+    @media (min-width: 768px) {
+      .map-container {
+        height: 520px;
+      }
+    }
+
+    /* Custom Marker Icons */
+    .custom-drop-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+      border: 2.5px solid #ffffff;
+      font-size: 16px;
+      transition: transform 0.15s ease;
+    }
+
+    .custom-drop-marker:hover {
+      transform: scale(1.15);
+    }
+
+    .gps-pulse {
+      width: 18px;
+      height: 18px;
+      background: #2563eb;
+      border: 3px solid #ffffff;
+      border-radius: 9999px;
+      box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.28);
+      animation: pulseRing 2s infinite;
+    }
+
+    @keyframes pulseRing {
+      0% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5);
+      }
+      70% {
+        box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+      }
     }
 
     .legend {
-      background: white;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(6px);
       padding: 0.5rem 0.75rem;
-      border-radius: 0.375rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-      font-size: 0.75rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+      font-size: 0.72rem;
       line-height: 1.25rem;
+      color: #1e293b;
     }
 
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.25rem;
+      gap: 0.45rem;
+      margin-bottom: 0.2rem;
     }
 
     .legend-color {
       width: 12px;
       height: 12px;
       border-radius: 9999px;
+      flex-shrink: 0;
     }
 
     .leaflet-popup-content {
-      width: 400px;
-      margin: 0;
+      margin: 10px 12px;
+      direction: rtl;
+      text-align: right;
+      font-family: 'Heebo', sans-serif;
+    }
+
+    /* Native dialog styling */
+    dialog::backdrop {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(3px);
+    }
+
+    /* Smooth range slider */
+    input[type="range"] {
+      accent-color: #059669;
     }
   </style>
 </head>
 
-<body class="bg-slate-100 text-slate-900">
-  <!-- Header -->
-  <header class="w-full bg-white shadow-sm border-b border-slate-200 sticky top-0 z-20">
-    <div class="mx-auto max-w-5xl px-4 py-2 flex items-center justify-between gap-3">
-      <div>
-        <h1 class="text-lg md:text-xl font-semibold text-slate-800">
-          קומפוסתרפיה - צור יגאל כוכב יאיר
+<body id="app-body" class="bg-slate-100 text-slate-900 min-h-screen pb-16 transition-colors duration-300">
+
+  <!-- ===================================================================== -->
+  <!-- AUTHENTICATION GATE SCREEN (Shown when supabase.auth.getSession() == null) -->
+  <!-- ===================================================================== -->
+  <section id="auth-gate-screen" class="min-h-screen flex items-center justify-center px-4 py-10 bg-gradient-to-b from-emerald-900 via-emerald-800 to-slate-900 text-slate-900">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-emerald-100 p-6 md:p-8 space-y-6 text-right" dir="rtl">
+      <!-- Brand Logo & Welcome Title -->
+      <div class="flex flex-col items-center text-center space-y-2.5">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-3xl shadow-lg border-2 border-emerald-400">
+          🌱
+        </div>
+        <h1 class="text-xl md:text-2xl font-extrabold text-slate-900 leading-snug">
+          מערך הקומפוסטציה הקהילתי • כוכב יאיר - צור יגאל
         </h1>
-        <p class="text-[0.7rem] md:text-xs text-slate-500 mt-0.5">
-          לוח בקרה לפיילוט הקומפוסט בשכונה
+        <p class="text-xs md:text-sm text-slate-500 leading-relaxed">
+          כניסה והרשמה מהירה לתושבים, נאמני מיחזור ובעלי עמדות קומפוסט — ללא צורך בסיסמה
         </p>
       </div>
-      <div class="hidden sm:flex flex-col items-end text-xs text-slate-500">
-        <div class="flex items-center gap-1.5 font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md"
-          id="active-day-indicator">
-          <span>הוצאת גזם היום:</span>
-          <span id="active-day-name" class="font-bold text-emerald-600">טוען...</span>
+
+      <!-- Google OAuth Sign-In Button -->
+      <div class="space-y-3">
+        <button type="button" id="btn-google-oauth"
+          class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-800 font-extrabold text-sm border-2 border-slate-200 hover:border-slate-300 shadow-sm transition flex items-center justify-center gap-2.5">
+          <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
+            <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"/>
+          </svg>
+          <span>המשך עם Google</span>
+        </button>
+
+        <div class="relative flex items-center py-1">
+          <div class="flex-grow border-t border-slate-200"></div>
+          <span class="shrink mx-3 text-[0.7rem] font-bold text-slate-400">או באמצעות אימייל</span>
+          <div class="flex-grow border-t border-slate-200"></div>
         </div>
-        <span class="mt-1.5 text-[0.7rem] text-slate-400">
-          סטטוס קומפוסטרים: A = ירוק · B = צהוב · C = אדום
-        </span>
+      </div>
+
+      <!-- Magic Link / OTP Sign-In Form -->
+      <form id="auth-magic-link-form" class="space-y-4">
+        <div>
+          <label for="auth-email-input" class="block text-xs font-extrabold text-slate-700 mb-1.5">
+            כתובת אימייל לכניסה או הרשמה:
+          </label>
+          <input id="auth-email-input" type="email" required dir="ltr"
+            placeholder="name@example.com"
+            class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 text-left focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" />
+        </div>
+
+        <button type="submit" id="btn-send-magic-link"
+          class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm shadow-lg transition flex items-center justify-center gap-2">
+          <span>✉️</span>
+          <span id="btn-send-magic-link-text">שלח קישור כניסה למייל</span>
+        </button>
+      </form>
+
+      <!-- Confirmation Message after sending Magic Link -->
+      <div id="auth-confirmation-box" class="hidden rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-right space-y-1.5">
+        <div class="flex items-center gap-2 text-emerald-800 font-extrabold text-sm">
+          <span>✅</span>
+          <span>קישור הכניסה נשלח!</span>
+        </div>
+        <p id="auth-confirmation-text" class="text-xs text-emerald-900 font-medium leading-relaxed">
+          קישור כניסה נשלח למייל שלך, בדוק את תיבת הדואר הנכנס או הספאם
+        </p>
+      </div>
+
+      <!-- Error Message Box -->
+      <div id="auth-error-box" class="hidden rounded-2xl bg-red-50 border border-red-200 p-3.5 text-xs font-bold text-red-700">
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 text-center text-[0.72rem] text-slate-400">
+        משתמשים חדשים נרשמים אוטומטית כנאמני מיחזור קהילתיים עם הכניסה הראשונה
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- AUTHENTICATED APPLICATION SHELL                                       -->
+  <!-- ===================================================================== -->
+  <div id="authenticated-app-shell" class="hidden">
+
+  <!-- Top Sticky Header (Strictly NO Dev Role Switcher!) -->
+  <header id="app-header" class="w-full bg-white shadow-sm border-b border-slate-200 sticky top-0 z-[1000] transition-colors duration-300">
+    <div class="mx-auto max-w-5xl px-3 py-2.5 flex items-center justify-between gap-2">
+      <!-- Brand Row -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">🌱</span>
+        <div class="min-w-0">
+          <h1 id="header-brand-title" class="text-sm md:text-lg font-extrabold text-slate-800 leading-tight truncate">
+            מערך הקומפוסטציה הקהילתי • כוכב יאיר - צור יגאל
+          </h1>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span id="auth-user-identity-badge" class="text-[0.72rem] font-bold text-emerald-700 truncate">
+              מחובר
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Actions: Connection status, Refresh & Sign Out Button -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <div id="supabase-status-badge" class="hidden sm:flex items-center gap-1.5 text-[0.68rem] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+          <span id="supabase-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="supabase-status-text">מחובר</span>
+        </div>
+
+        <button id="btn-refresh-data" type="button" title="רענן נתונים"
+          class="p-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-medium transition">
+          🔄
+        </button>
+
+        <button id="btn-sign-out" type="button"
+          class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-700 text-xs font-extrabold transition flex items-center gap-1">
+          <span>🚪</span>
+          <span>התנתק</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Admin Sticky Sub-bar (Rendered & shown ONLY when is_admin === true) -->
+    <div id="admin-act-as-row" class="hidden w-full bg-indigo-50/95 backdrop-blur border-t border-indigo-200 px-3 py-2" style="position: sticky; top: 0; z-index: 1000;">
+      <div class="mx-auto max-w-5xl space-y-2">
+        <!-- Row 1: "פועל בשם..." (Compost Units CO-0001..CO-0018 ONLY) + IoT Telemetry Button -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 flex-1 min-w-[220px]">
+            <label for="admin-act-as-select" class="text-xs font-extrabold text-indigo-800 whitespace-nowrap">
+              פועל בשם...
+            </label>
+            <select id="admin-act-as-select"
+              class="flex-1 text-xs font-bold bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-admin-toggle-iot"
+              class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-300 text-xs font-extrabold shadow-sm transition">
+              🛰️ טלמטריית IoT
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2: Admin View Switcher Tabs (Dynamically rendered in JS ONLY when is_admin === true) -->
+        <div id="admin-view-switcher-mount"></div>
       </div>
     </div>
   </header>
 
-  <!-- Main content -->
-  <main class="mx-auto max-w-5xl px-4 pb-6">
-    <!-- Stats header - compact for single-screen view -->
-    <section class="mt-2">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3" aria-label="Compost pilot statistics">
-        <!-- Sites Active -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between">
-          <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
-            אתרים פעילים
+  <!-- Main Workspace -->
+  <main class="mx-auto max-w-5xl px-3 pt-3 space-y-3">
+
+    <!-- Contextual Sub-bar: Trustee Rank Summary -->
+    <section id="context-subbar" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 px-3 py-2">
+      <!-- Trustee current authenticated user rank row (No manual user switcher) -->
+      <div id="trustee-user-picker-row" class="hidden flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-600">נאמן מיחזור מחובר:</span>
+          <span id="trustee-authenticated-name" class="text-xs font-extrabold text-slate-900"></span>
+        </div>
+        <div id="trustee-rank-pill" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+          דרגה: טוען...
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 2: TRUSTEE ("נאמן מיחזור" - כותרת: "דיווח מיקום חומר אורגני") -->
+    <!-- =================================================================== -->
+    <section id="view-trustee" class="hidden space-y-3">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-800">
+              דיווח מיקום חומר אורגני
+            </h2>
+            <p class="text-xs text-slate-500">
+              סמן את סוגי החומר לסינון עמדות קומפוסט פנויות ודיווחי רחוב קיימים
+            </p>
           </div>
-          <div id="stats-sites-active" class="mt-0.5 text-xl md:text-2xl font-semibold text-slate-800">
-            0
-          </div>
-          <div class="mt-0.5 text-[0.65rem] text-slate-400">
-            מספר נקודות קומפוסט פעילות במפה
+          <div class="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg border border-emerald-200 font-medium">
+            <span>הוצאת גזם היום:</span>
+            <span class="active-day-label font-bold">טוען...</span>
           </div>
         </div>
 
-        <!-- Total Kitchen Waste -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between">
-          <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
-            פסולת מטבח שנחסכה (ק&quot;ג)
+        <!-- Multi-select filter bar: פסולת מטבח, ערימת עלים, דשא קצור -->
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="סינון סוג חומר אורגני">
+          <button type="button" data-filter="kitchen"
+            class="trustee-filter-chip active flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition bg-orange-600 text-white border-orange-600 shadow-sm">
+            <span>🍎</span>
+            <span>פסולת מטבח</span>
+            <span class="chip-check">✓</span>
+          </button>
+
+          <button type="button" data-filter="leaves"
+            class="trustee-filter-chip active flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition bg-amber-700 text-white border-amber-700 shadow-sm">
+            <span>🍂</span>
+            <span>ערימת עלים</span>
+            <span class="chip-check">✓</span>
+          </button>
+
+          <button type="button" data-filter="grass"
+            class="trustee-filter-chip active flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition bg-emerald-600 text-white border-emerald-600 shadow-sm">
+            <span>🌿</span>
+            <span>דשא קצור</span>
+            <span class="chip-check">✓</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 4 HEADER KPIs: ADMIN ("אדמין • ברוש שמלה")                      -->
+    <!-- =================================================================== -->
+    <section id="view-admin-kpis" class="hidden space-y-2.5">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+          <div class="text-[0.7rem] text-slate-500 font-semibold">סה"כ משקל שנחסך מהטמנה</div>
+          <div id="admin-kpi-total-saved" class="text-xl md:text-2xl font-extrabold text-emerald-600 mt-0.5">0 ק"ג</div>
+          <div id="admin-kpi-saved-breakdown" class="text-[0.65rem] text-slate-400 mt-0.5">שקילות + דיווחים מאושרים</div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+          <div class="text-[0.7rem] text-slate-500 font-semibold">שקילות בעמדות (מטבח + גזם)</div>
+          <div id="admin-kpi-weighing-sum" class="text-xl md:text-2xl font-extrabold text-orange-500 mt-0.5">0 ק"ג</div>
+          <div id="admin-kpi-weighing-detail" class="text-[0.65rem] text-slate-400 mt-0.5">מתוך טבלת weighing_logs</div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+          <div class="text-[0.7rem] text-slate-500 font-semibold">משקל מוערך מדיווחים מאושרים</div>
+          <div id="admin-kpi-drops-kg" class="text-xl md:text-2xl font-extrabold text-amber-600 mt-0.5">0 ק"ג</div>
+          <div id="admin-kpi-drops-count" class="text-[0.65rem] text-slate-400 mt-0.5">internal_estimated_kg</div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+          <div class="text-[0.7rem] text-slate-500 font-semibold">עמדות קומפוסט ומוקדי רחוב</div>
+          <div id="admin-kpi-units-status" class="text-xl md:text-2xl font-extrabold text-slate-800 mt-0.5">18 עמדות</div>
+          <div id="admin-kpi-open-drops" class="text-[0.65rem] text-indigo-600 font-semibold mt-0.5">0 דיווחי רחוב פעילים</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 3: OWNER ("בעל קומפוסטר • רולי אילון" - יחידה CO-0012)         -->
+    <!-- Ordered Top-to-Bottom:                                              -->
+    <!-- 1. הזנת שקילה                                                        -->
+    <!-- 2. סטטוס ובריאות הערימה                                              -->
+    <!-- 3. זמינות העמדה לקליטת חומרים                                        -->
+    <!-- 4. הערה אישית של מפעיל הקומפוסטר (גלויה במפה)                        -->
+    <!-- 5. מפת מוקדי חומר אורגני ברחוב (בתחתית המסך)                         -->
+    <!-- =================================================================== -->
+    <section id="view-owner" class="hidden space-y-3">
+      <!-- Station Management Header Banner -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-3">
+          <div id="owner-unit-avatar" class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-extrabold text-sm border border-emerald-200 overflow-hidden">
+            CO-0012
           </div>
-          <div id="stats-kitchen-total" class="mt-0.5 text-xl md:text-2xl font-semibold text-orange-500">
-            0
-          </div>
-          <div class="mt-0.5 text-[0.65rem] text-slate-400">
-            סך כל פסולת המטבח שנחסכה בזכות הקומפוסטרים
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="owner-panel-title" class="text-base md:text-lg font-extrabold text-slate-800">
+                ניהול עמדת קומפוסט • CO-0012
+              </h2>
+              <span id="owner-unit-size-badge" class="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                — ליטר
+              </span>
+            </div>
+            <p id="owner-unit-location" class="text-xs text-slate-500 mt-0.5">
+              טוען כתובת עמדה...
+            </p>
           </div>
         </div>
 
-        <!-- Total Garden Waste -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-col justify-between">
-          <div class="text-[0.65rem] uppercase tracking-wide text-slate-500">
-            פסולת גינה שנחסכה (ק&quot;ג)
+        <div class="text-left">
+          <span id="owner-save-feedback" class="text-xs font-bold text-emerald-600 hidden">
+            ✓ נשמר ב-Supabase
+          </span>
+        </div>
+      </div>
+
+      <!-- 1. הזנת שקילה (Top of screen) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <form id="owner-weighing-form" class="space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+            <h3 class="text-sm md:text-base font-extrabold text-slate-800">1. ⚖️ הזנת שקילה</h3>
+            <span id="owner-unit-weighing-total" class="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              סה"כ נשקל בעמדה: 0 ק"ג
+            </span>
           </div>
-          <div id="stats-garden-total" class="mt-0.5 text-xl md:text-2xl font-semibold text-emerald-600">
-            0
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="input-kitchen-kg" class="block text-xs font-bold text-slate-700 mb-1">
+                מטבח (ק"ג)
+              </label>
+              <input id="input-kitchen-kg" type="number" step="0.1" min="0" placeholder="0.0"
+                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <div>
+              <label for="input-garden-kg" class="block text-xs font-bold text-slate-700 mb-1">
+                גזם (ק"ג)
+              </label>
+              <input id="input-garden-kg" type="number" step="0.1" min="0" placeholder="0.0"
+                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
           </div>
-          <div class="mt-0.5 text-[0.65rem] text-slate-400">
-            סך כל פסולת הגינה שנחסכה בזכות הקומפוסטרים
+
+          <button type="submit" id="btn-submit-weighing"
+            class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-xs md:text-sm shadow-sm transition">
+            💾 שמור שקילה ביומן השקילות
+          </button>
+        </form>
+      </div>
+
+      <!-- 2. סטטוס ובריאות הערימה (Single combined unit) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3.5">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <h3 class="text-sm md:text-base font-extrabold text-slate-800">2. 🌡️ סטטוס ובריאות הערימה</h3>
+          <span id="owner-health-saved-badge" class="hidden text-xs font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+            ✓ סטטוס ובריאות עודכנו!
+          </span>
+        </div>
+
+        <!-- Status A / B / C selection (staged until clicking "עדכן סטטוס ובריאות") -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 mb-1.5">
+            סטטוס קומפוסטר (A / B / C)
+          </label>
+          <div class="grid grid-cols-3 gap-2" role="group" aria-label="בחירת סטטוס עמדה">
+            <button type="button" data-status-val="A"
+              class="owner-status-btn py-2 px-2 rounded-xl text-xs font-extrabold border transition flex flex-col items-center gap-0.5">
+              <span>🟢 A</span>
+              <span class="text-[0.65rem] font-normal">תקין ופעיל</span>
+            </button>
+            <button type="button" data-status-val="B"
+              class="owner-status-btn py-2 px-2 rounded-xl text-xs font-extrabold border transition flex flex-col items-center gap-0.5">
+              <span>🟡 B</span>
+              <span class="text-[0.65rem] font-normal">במעקב / טיפול</span>
+            </button>
+            <button type="button" data-status-val="C"
+              class="owner-status-btn py-2 px-2 rounded-xl text-xs font-extrabold border transition flex flex-col items-center gap-0.5">
+              <span>🔴 C</span>
+              <span class="text-[0.65rem] font-normal">תקלה / חריג</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3 Health Sliders: Temperature, Moisture, Volume -->
+        <div class="space-y-3 pt-1">
+          <!-- Temperature: קפוא to אש -->
+          <div>
+            <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+              <span>טמפרטורה</span>
+              <span id="owner-temp-val-label" class="text-emerald-700">3 / 5</span>
+            </div>
+            <input id="owner-slider-temp" type="range" min="1" max="5" step="1" value="3"
+              class="w-full cursor-pointer" />
+            <div class="flex justify-between text-[0.68rem] font-semibold text-slate-400">
+              <span>קפוא (1)</span>
+              <span>אש (5)</span>
+            </div>
+          </div>
+
+          <!-- Moisture: יבש to רטוב -->
+          <div>
+            <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+              <span>לחות</span>
+              <span id="owner-moisture-val-label" class="text-emerald-700">3 / 5</span>
+            </div>
+            <input id="owner-slider-moisture" type="range" min="1" max="5" step="1" value="3"
+              class="w-full cursor-pointer" />
+            <div class="flex justify-between text-[0.68rem] font-semibold text-slate-400">
+              <span>יבש (1)</span>
+              <span>רטוב (5)</span>
+            </div>
+          </div>
+
+          <!-- Volume: ריק to מלא -->
+          <div>
+            <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+              <span>נפח</span>
+              <span id="owner-volume-val-label" class="text-emerald-700">3 / 5</span>
+            </div>
+            <input id="owner-slider-volume" type="range" min="1" max="5" step="1" value="3"
+              class="w-full cursor-pointer" />
+            <div class="flex justify-between text-[0.68rem] font-semibold text-slate-400">
+              <span>ריק (1)</span>
+              <span>מלא (5)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dedicated Save Button for Status & Health -->
+        <button type="button" id="btn-save-status-and-health"
+          class="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1.5">
+          <span>💾</span>
+          <span>עדכן סטטוס ובריאות</span>
+        </button>
+      </div>
+
+      <!-- 3. זמינות העמדה לקליטת חומרים (3 Toggles) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2.5">
+        <h3 class="text-sm md:text-base font-extrabold text-slate-800 border-b border-slate-100 pb-2">
+          3. 🔓 זמינות העמדה לקליטת חומרים
+        </h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <!-- accepting_carbon -->
+          <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-blue-300 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🍂</span>
+              <div>
+                <div class="text-xs font-bold text-slate-800">פנוי לקליטת חומר פחמני</div>
+                <div class="text-[0.65rem] text-slate-400">עלים יבשים / גזם דק</div>
+              </div>
+            </div>
+            <input type="checkbox" id="toggle-accepting-carbon" class="w-5 h-5 accent-blue-600 rounded cursor-pointer" />
+          </label>
+
+          <!-- accepting_nitrogen -->
+          <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-emerald-300 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🌿</span>
+              <div>
+                <div class="text-xs font-bold text-slate-800">פנוי לקליטת חומר חנקני</div>
+                <div class="text-[0.65rem] text-slate-400">דשא קצור וצמחייה ירוקה</div>
+              </div>
+            </div>
+            <input type="checkbox" id="toggle-accepting-nitrogen" class="w-5 h-5 accent-emerald-600 rounded cursor-pointer" />
+          </label>
+
+          <!-- accepting_kitchen -->
+          <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-orange-300 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🍎</span>
+              <div>
+                <div class="text-xs font-bold text-slate-800">פנוי לקליטת פסולת מטבח</div>
+                <div class="text-[0.65rem] text-slate-400">שאריות ירקות ופירות</div>
+              </div>
+            </div>
+            <input type="checkbox" id="toggle-accepting-kitchen" class="w-5 h-5 accent-orange-600 rounded cursor-pointer" />
+          </label>
+        </div>
+      </div>
+
+      <!-- 4. הערה אישית של מפעיל הקומפוסטר (גלויה במפה) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
+        <div class="border-b border-slate-100 pb-2">
+          <label for="owner-operator-public-note" class="block text-sm md:text-base font-extrabold text-slate-800">
+            4. 💬 הערה אישית של מפעיל הקומפוסטר (גלויה במפה)
+          </label>
+          <p class="text-xs text-slate-500 mt-0.5">
+            הערה זו נשמרת ב-<code>operator_public_note</code> ותוצג בחלונית העמדה על המפה לכל המשתמשים
+          </p>
+        </div>
+
+        <textarea id="owner-operator-public-note" rows="2"
+          placeholder="למשל: נא להניח את העלים ליד השער הירוק..."
+          class="w-full rounded-xl border border-emerald-300 bg-slate-50 px-3 py-2 text-xs md:text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" id="btn-save-operator-public-note"
+            class="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-sm">
+            💾 שמור הערה גלויה במפה
+          </button>
+
+          <!-- Optional internal maintenance notes collapsible for owner/admin -->
+          <details class="w-full mt-2 pt-2 border-t border-slate-100">
+            <summary class="text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-700">
+              🛠️ הערות תחזוקה פנימיות לעמדה (maintenance_notes)
+            </summary>
+            <div class="mt-2 space-y-2">
+              <textarea id="owner-maintenance-notes" rows="2" placeholder="הזן הערות תחזוקה פנימיות..."
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"></textarea>
+              <button type="button" id="btn-save-maintenance-notes"
+                class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition">
+                עדכן הערות תחזוקה
+              </button>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- 5. מפת מוקדי חומר אורגני ברחוב (Bottom of screen in Owner mode) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm md:text-base font-extrabold text-slate-800">
+              5. 🗺️ מפת מוקדי חומר אורגני ברחוב
+            </h3>
+            <p class="text-xs text-slate-500">
+              ערימות אורגניות זמינות לאיסוף (48 שעות) • לחץ על מוקד במפה או בכרטיסיות לסימון "אני על זה", אישור איסוף או דחייה
+            </p>
+          </div>
+          <!-- Left side of title row: active badge + filter button to its left (in RTL) -->
+          <div class="flex items-center gap-2">
+            <span id="owner-active-drops-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              0 מוקדים פעילים
+            </span>
+            <button type="button" id="btn-toggle-drops-filter"
+              class="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold transition flex items-center gap-1">
+              <span>🔽</span>
+              <span>סינון</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Filter & Sort Menu for Street Organic Drops -->
+        <div id="owner-drops-filter-panel" class="hidden bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-2.5 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Material Type Filter -->
+            <div>
+              <label for="owner-drops-filter-type" class="block font-extrabold text-slate-700 mb-1">
+                סינון לפי סוג חומר אורגני:
+              </label>
+              <select id="owner-drops-filter-type"
+                class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="all">הכל (כל סוגי החומר)</option>
+                <option value="leaves">🍂 ערימת עלים</option>
+                <option value="grass">🌿 דשא קצור</option>
+                <option value="kitchen">🍎 פסולת מטבח</option>
+              </select>
+            </div>
+
+            <!-- Sort Order -->
+            <div>
+              <label for="owner-drops-sort-by" class="block font-extrabold text-slate-700 mb-1">
+                מיון מוקדים לפי:
+              </label>
+              <select id="owner-drops-sort-by"
+                class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="distance">📍 מרחק מהמשתמש (מהקרוב לרחוק לפי GPS)</option>
+                <option value="expiry">⏳ זמינות / זמן שנותר (מהקרוב לפוג לרחוק)</option>
+                <option value="rank">🏆 דירוג המדווח (מהגבוה לנמוך)</option>
+                <option value="material">🌿 סוג חומר אורגני</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map host slot when in Owner mode -->
+        <div id="owner-map-slot" class="space-y-3"></div>
+
+        <!-- Street Drops Action Cards ("אני על זה" / "אושר ונאסף" / "דחייה") -->
+        <div id="owner-drops-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+          <!-- Populated with street drop action cards with the 3 action buttons -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- SHARED INTERACTIVE MAP SECTION (Dynamically placed per active view) -->
+    <!-- =================================================================== -->
+    <div id="default-map-slot">
+      <section id="shared-map-section" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
+        <!-- Map Top Bar -->
+        <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-2">
+            <span id="map-view-badge" class="font-bold text-slate-700">מפת קומפוסטציה ומוקדי חומר אורגני</span>
+            <span id="gps-distance-badge" class="text-[0.7rem] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              📍 GPS פעיל
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-locate-me"
+              class="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs shadow-sm transition">
+              🎯 המיקום שלי
+            </button>
+          </div>
+        </div>
+
+        <!-- Compact Legend Bar ABOVE the Map (Outside the map canvas so it never obscures streets/units) -->
+        <div id="external-map-legend" class="px-3 py-1.5 bg-white border-b border-slate-200 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[0.7rem] font-semibold text-slate-700">
+          <span class="font-extrabold text-slate-500">מקרא:</span>
+          <span class="inline-flex items-center gap-1">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>
+            <span>עמדה A – תקין</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span>
+            <span>עמדה B – במעקב</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span>
+            <span>עמדה C – בעיה</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span class="w-2.5 h-2.5 rounded-full border-2 border-blue-600 inline-block"></span>
+            <span>מסגרת כחולה – קולט עלים (פחמן)</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span>🍂</span>
+            <span>ערימת עלים</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span>🌿</span>
+            <span>דשא קצור</span>
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span>🍎</span>
+            <span>פסולת מטבח</span>
+          </span>
+        </div>
+
+        <!-- Leaflet Map Container -->
+        <div id="map" class="map-container"></div>
+
+        <!-- Floating CTA Buttons inside Map -->
+        <!-- Trustee Floating CTA: "דווח במיקום הנוכחי שלי" -->
+        <div id="trustee-floating-cta" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[92%] max-w-sm">
+          <button type="button" id="btn-report-current-gps"
+            class="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm shadow-xl border-2 border-white flex items-center justify-center gap-2 transition">
+            <span>📍</span>
+            <span>דווח במיקום הנוכחי שלי</span>
+          </button>
+        </div>
+
+        <!-- Owner Floating CTA: "+ דיווח על ערימה ברחוב" -->
+        <div id="owner-floating-cta" class="hidden absolute bottom-4 right-4 z-20">
+          <button type="button" id="btn-owner-report-pile"
+            class="py-2.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-extrabold text-xs md:text-sm shadow-xl border-2 border-white flex items-center gap-1.5 transition">
+            <span class="text-base leading-none">+</span>
+            <span>דיווח על ערימה ברחוב</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- TRUSTEE OPEN COMPOST STATIONS LIST + BOTTOM DRAWER                  -->
+    <!-- =================================================================== -->
+    <section id="view-trustee-bottom" class="hidden space-y-3">
+      <!-- Nearby Open Stations matching active filters -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-extrabold text-slate-800">
+            עמדות קומפוסט פתוחות לקליטה (לפי הסינון שלך)
+          </h3>
+          <span id="trustee-open-units-count" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+            0 עמדות
+          </span>
+        </div>
+        <div id="trustee-units-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto">
+        </div>
+      </div>
+
+      <!-- Bottom Drawer: "הודעות והדירוג שלי" (NO WEIGHTS SHOWN ANYWHERE HERE) -->
+      <div class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        <button type="button" id="trustee-drawer-toggle"
+          class="w-full px-4 py-3 bg-slate-800 text-white flex items-center justify-between text-right">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">🏆</span>
+            <div>
+              <div class="text-sm font-extrabold">הודעות והדירוג שלי</div>
+              <div id="trustee-drawer-subtitle" class="text-[0.7rem] text-slate-300">
+                מעקב אישור דיווחים והתקדמות לדרגה הבאה
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="trustee-transparent-counter" class="text-xs font-bold bg-slate-700 px-2.5 py-1 rounded-full text-emerald-300 border border-slate-600">
+              אושרו: 0 | נפסלו: 0
+            </span>
+            <span id="trustee-drawer-chevron" class="text-xs transition-transform">▼</span>
+          </div>
+        </button>
+
+        <div id="trustee-drawer-body" class="p-4 space-y-4">
+          <!-- Rank & Progress to next rank -->
+          <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <div>
+                <span class="text-xs text-slate-500">דרגה נוכחית:</span>
+                <span id="trustee-current-rank-title" class="text-sm font-extrabold text-emerald-700 mr-1">♻️ נאמן מיחזור</span>
+              </div>
+              <span id="trustee-next-rank-label" class="text-xs font-semibold text-slate-600">
+                עוד 3 דיווחים מאושרים לדרגה הבאה: 🌱 שומר הניצן (יעד: 3)
+              </span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+              <div id="trustee-rank-progress-bar" class="h-full bg-gradient-to-l from-emerald-500 to-teal-600 rounded-full transition-all duration-500" style="width: 20%;"></div>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-600 font-semibold">
+              <span id="trustee-counter-detailed">אושרו: 0 | נפסלו: 0</span>
+              <span id="trustee-points-hint" class="text-[0.7rem] text-slate-400">כל איסוף מאושר מקדם אותך בדרגה!</span>
+            </div>
+          </div>
+
+          <!-- Live Feed of user's reports -->
+          <div>
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wide mb-2">
+              פיד עדכונים חי על הדיווחים שלי
+            </h4>
+            <div id="trustee-live-feed" class="space-y-2 max-h-64 overflow-y-auto">
+              <!-- Populated dynamically without any weight/kg values -->
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Map card -->
-    <section class="mt-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <!-- Map container -->
-      <div id="map" class="w-full"></div>
+    <!-- =================================================================== -->
+    <!-- VIEW 4 BOTTOM: ADMIN PUBLIC UNITS & STREET DROPS MANAGEMENT         -->
+    <!-- =================================================================== -->
+    <section id="view-admin-bottom" class="hidden space-y-3">
+      <!-- Public & Community Units Editor Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-800">
+              ניהול כלל 18 העמדות ועמדות ציבוריות (CO-0001, CO-0017, CO-0018 וכו')
+            </h2>
+            <p class="text-xs text-slate-500">
+              עריכה ישירה של סטטוס A/B/C, קליטת חומר פחמני (מסגרת כחולה במפה) והערות תחזוקה
+            </p>
+          </div>
+        </div>
+
+        <div id="admin-units-grid" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-[460px] overflow-y-auto p-0.5">
+          <!-- Populated dynamically with all 18 units -->
+        </div>
+      </div>
+
+      <!-- Admin Full Street Drops & Internal Estimated Weight Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-sm font-extrabold text-slate-800">
+              כלל דיווחי הרחוב 
+            </h3>
+            <p class="text-xs text-slate-500">
+              ניהול מלא של דיווחים בסטטוס פתוח, בטיפול (claimed), אושר או נדחה
+            </p>
+          </div>
+        </div>
+        <div id="admin-drops-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        </div>
+      </div>
     </section>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 5: IOT SENSOR ("חיישן IoT • ESP32-CO-0017" - Dark Mode Only)    -->
+    <!-- =================================================================== -->
+    <section id="view-iot" class="hidden space-y-4 text-slate-100">
+      <!-- Technical Telemetry Header Card -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl">
+              📡
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-base md:text-lg font-extrabold text-white tracking-tight">
+                  חיישן IoT • ESP32-CO-0017
+                </h2>
+                <span class="px-2 py-0.5 text-[0.65rem] font-mono font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  TELEMETRY ONLY
+                </span>
+              </div>
+              <p id="iot-unit-location" class="text-xs text-slate-400 mt-0.5">
+                עמדה ציבורית CO-0017 • קריאה אוטומטית מרחוק (ללא הזנה ידנית)
+              </p>
+            </div>
+          </div>
+
+          <!-- Webhook Connection Status -->
+          <div class="flex flex-col items-end">
+            <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 -mr-4"></span>
+              <span class="text-xs font-mono font-bold text-emerald-300">Webhook: ACTIVE (200 OK)</span>
+            </div>
+            <span id="iot-last-sync" class="text-[0.68rem] font-mono text-slate-400 mt-1">
+              סנכרון אחרון: בזמן אמת
+            </span>
+          </div>
+        </div>
+
+        <!-- Real-time Metrics Gauges from unit CO-0017 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <!-- sensor_temp_c -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-400">טמפרטורת ליבה (sensor_temp_c)</span>
+              <span class="text-xs font-mono text-orange-400">DS18B20</span>
+            </div>
+            <div class="my-2 flex items-baseline gap-1.5">
+              <span id="iot-temp-value" class="text-3xl md:text-4xl font-mono font-extrabold text-orange-400">--</span>
+              <span class="text-lg font-mono text-slate-400">°C</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div id="iot-temp-bar" class="h-full bg-gradient-to-l from-red-500 via-orange-400 to-emerald-400 rounded-full transition-all duration-500" style="width: 65%;"></div>
+            </div>
+            <div id="iot-temp-zone-label" class="mt-2 text-[0.7rem] text-slate-400 font-mono">
+              טווח תרמופילי פעיל (45°C - 65°C)
+            </div>
+          </div>
+
+          <!-- sensor_moisture_pct -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-400">לחות מצע (sensor_moisture_pct)</span>
+              <span class="text-xs font-mono text-cyan-400">CAP-SOIL-V2</span>
+            </div>
+            <div class="my-2 flex items-baseline gap-1.5">
+              <span id="iot-moisture-value" class="text-3xl md:text-4xl font-mono font-extrabold text-cyan-400">--</span>
+              <span class="text-lg font-mono text-slate-400">%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div id="iot-moisture-bar" class="h-full bg-gradient-to-l from-cyan-400 to-blue-500 rounded-full transition-all duration-500" style="width: 55%;"></div>
+            </div>
+            <div id="iot-moisture-zone-label" class="mt-2 text-[0.7rem] text-slate-400 font-mono">
+              לחות אופטימלית למיקרואורגניזמים (45% - 65%)
+            </div>
+          </div>
+
+          <!-- Unit Status & Metadata (Read-only) -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-400">מזהה בקר ועמדה</span>
+              <span id="iot-status-pill" class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Status A</span>
+            </div>
+            <div class="my-2 space-y-1 font-mono text-xs text-slate-300">
+              <div>NODE_ID: <span class="text-white font-bold">ESP32-CO-0017</span></div>
+              <div>UNIT_ID: <span class="text-white font-bold">CO-0017</span></div>
+              <div>CAPACITY: <span id="iot-capacity-liters" class="text-white font-bold">-- L</span></div>
+            </div>
+            <div class="text-[0.68rem] font-mono text-slate-500 border-t border-slate-800 pt-2">
+              PATCH /rest/v1/units?unit_id=eq.CO-0017
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 24-Hour Trend Chart (SVG Telemetry Chart) -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 class="text-sm font-extrabold text-white">
+              📈 גרף מגמה ל-24 שעות (טמפרטורה °C ולחות %)
+            </h3>
+            <p class="text-xs text-slate-400">
+              דגימה מחזורית מבקר ESP32-CO-0017 • תצוגת ניטור בלבד ללא טפסי הזנה ידניים
+            </p>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <span class="flex items-center gap-1.5 text-orange-400">
+              <span class="w-3 h-1 bg-orange-400 rounded"></span> טמפרטורה (°C)
+            </span>
+            <span class="flex items-center gap-1.5 text-cyan-400">
+              <span class="w-3 h-1 bg-cyan-400 rounded"></span> לחות (%)
+            </span>
+          </div>
+        </div>
+
+        <div id="iot-chart-container" class="w-full h-56 bg-slate-950 rounded-xl border border-slate-800 p-3">
+          <!-- Rendered dynamically via SVG -->
+        </div>
+      </div>
+    </section>
+
   </main>
+  </div><!-- End of #authenticated-app-shell -->
+
+  <!-- ===================================================================== -->
+  <!-- DIALOG 1: Report Organic Material Drop ("דווח במיקום הנוכחי שלי")      -->
+  <!-- ===================================================================== -->
+  <dialog id="dialog-report-drop" class="rounded-2xl shadow-2xl border border-slate-200 p-0 w-[92%] max-w-md bg-white text-slate-900" dir="rtl">
+    <form id="form-report-drop" method="dialog" class="p-4 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <h3 class="text-base font-extrabold text-slate-800">📍 דיווח חדש על חומר אורגני ברחוב</h3>
+        <button type="button" id="btn-close-report-dialog" class="text-slate-400 hover:text-slate-600 text-lg font-bold px-2">✕</button>
+      </div>
+
+      <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+        <span>מדווח: <strong id="report-dialog-user-name">יוסי כהן</strong></span>
+        <span id="report-dialog-coords" class="font-mono text-[0.7rem] text-slate-500">32.2285, 34.9814</span>
+      </div>
+
+      <!-- Draggable Pin Mini-Map for Manual Location Adjustment -->
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-[0.72rem]">
+          <span class="font-extrabold text-slate-700">📌 מיקום הערימה (גרור את הסיכה לדיוק על המפה):</span>
+          <button type="button" id="btn-report-recenter-gps" class="text-emerald-700 font-bold hover:underline">
+            🎯 איפוס ל-GPS
+          </button>
+        </div>
+        <div id="report-pin-map" class="w-full h-44 rounded-xl border border-slate-300 overflow-hidden z-10"></div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-extrabold text-slate-700 mb-2">
+          בחר סוגי חומר אורגני (ניתן לסמן מספר סוגים יחד):
+        </label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="cursor-pointer">
+            <input type="checkbox" name="drop_material_type" value="leaves" checked class="peer sr-only" />
+            <div class="p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-amber-700 peer-checked:bg-amber-50 text-center transition relative">
+              <div class="text-2xl">🍂</div>
+              <div class="text-xs font-bold text-slate-800 mt-1">ערימת עלים</div>
+              <div class="text-[0.65rem] text-slate-500">פחמן (leaves)</div>
+            </div>
+          </label>
+
+          <label class="cursor-pointer">
+            <input type="checkbox" name="drop_material_type" value="grass" class="peer sr-only" />
+            <div class="p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50 text-center transition relative">
+              <div class="text-2xl">🌿</div>
+              <div class="text-xs font-bold text-slate-800 mt-1">דשא קצור</div>
+              <div class="text-[0.65rem] text-slate-500">חנקן (grass)</div>
+            </div>
+          </label>
+
+          <label class="cursor-pointer">
+            <input type="checkbox" name="drop_material_type" value="kitchen" class="peer sr-only" />
+            <div class="p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-orange-600 peer-checked:bg-orange-50 text-center transition relative">
+              <div class="text-2xl">🍎</div>
+              <div class="text-xs font-bold text-slate-800 mt-1">פסולת מטבח</div>
+              <div class="text-[0.65rem] text-slate-500">אורגני (kitchen)</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label for="report-drop-notes" class="block text-xs font-bold text-slate-700 mb-1">תיאור מיקום / הערה קצרה (אופציונלי):</label>
+        <input id="report-drop-notes" type="text" placeholder="למשל: ליד שער הכניסה, בשקים פתוחים..."
+          class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" id="btn-cancel-report-dialog"
+          class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50">
+          ביטול
+        </button>
+        <button type="submit" id="btn-confirm-report-drop"
+          class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md">
+          שלח דיווח למוקד (open)
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================================================================== -->
+  <!-- DIALOG 2: Reject Street Drop Reason Picker ("❌ דחייה")                -->
+  <!-- ===================================================================== -->
+  <dialog id="dialog-reject-drop" class="rounded-2xl shadow-2xl border border-slate-200 p-0 w-[92%] max-w-sm bg-white text-slate-900" dir="rtl">
+    <form id="form-reject-drop" method="dialog" class="p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 class="text-sm font-extrabold text-red-700">❌ בחירת סיבת דחיית דיווח</h3>
+        <button type="button" id="btn-close-reject-dialog" class="text-slate-400 hover:text-slate-600 font-bold px-2">✕</button>
+      </div>
+
+      <input type="hidden" id="reject-drop-id-input" value="" />
+
+      <div class="space-y-2">
+        <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-red-50/50">
+          <input type="radio" name="reject_reason" value="פסולת לא אורגנית" checked class="accent-red-600" />
+          <span class="text-xs font-bold text-slate-800">פסולת לא אורגנית</span>
+        </label>
+
+        <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-red-50/50">
+          <input type="radio" name="reject_reason" value="לא נמצא במקום" class="accent-red-600" />
+          <span class="text-xs font-bold text-slate-800">לא נמצא במקום</span>
+        </label>
+
+        <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-red-50/50">
+          <input type="radio" name="reject_reason" value='פונה ע"י המועצה' class="accent-red-600" />
+          <span class="text-xs font-bold text-slate-800">פונה ע"י המועצה</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" id="btn-cancel-reject-dialog"
+          class="px-3.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-600">
+          ביטול
+        </button>
+        <button type="submit"
+          class="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold shadow-sm">
+          אשר דחיית דיווח
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast Notification -->
+  <div id="app-toast" class="fixed bottom-4 left-4 z-50 hidden bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl border border-slate-700">
+  </div>
+
+  <!-- Supabase JS SDK v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <!-- Runtime config (optional) -->
-  <script>
-    // Optional override (defaults to the published CSV URL in map-dashboard.js):
-    // window.COMPOST_CSV_URL =
-    //   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_4sQSebaYE0EWGcTNqJVNg87iJRpffiwmqUV2Xf8CPYqGD3yN5HS2pyx_5t0GT83y5zaD4GVJ0WuW/pub?gid=0&single=true&output=csv";
-
-    // Optional inline mode (no fetch/CORS at all):
-    // window.COMPOST_CSV_TEXT = `id,resident_name,lat,long,status,sub_status,carbon_level,phone
-    // CO-001,דוגמה,32.2285,34.9814,A,Thermophilic,4,0501234567`;
-  </script>
-
   <!-- Waste Zones Data -->
   <script src="./waste-zones.js"></script>
 
-  <!-- App logic -->
+  <!-- App Logic -->
   <script src="./map-dashboard.js"></script>
 </body>
 
