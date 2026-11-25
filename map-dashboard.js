@@ -999,26 +999,59 @@ function initMap() {
   initGeolocation();
 }
 
-function initGeolocation() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      state.userGps = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        accuracy: Math.round(pos.coords.accuracy || 15),
-        detected: true
-      };
-      const gpsBadge = document.getElementById("gps-distance-badge");
-      if (gpsBadge) {
-        gpsBadge.textContent = `📍 GPS מחובר (±${state.userGps.accuracy}מ')`;
+function initGeolocation(centerOnSuccess = false) {
+  const gpsBadge = document.getElementById("gps-distance-badge");
+  if (!navigator.geolocation) {
+    if (gpsBadge) gpsBadge.textContent = "⚠️ הדפדפן לא תומך ב-GPS";
+    return;
+  }
+
+  const applyPosition = (pos) => {
+    state.userGps = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: Math.round(pos.coords.accuracy || 15),
+      detected: true
+    };
+    if (gpsBadge) {
+      gpsBadge.textContent = `📍 GPS מחובר (±${state.userGps.accuracy}מ')`;
+    }
+    if (centerOnSuccess && state.map) {
+      state.map.setView([state.userGps.lat, state.userGps.lng], 16, { animate: true });
+    }
+    renderMapMarkers();
+  };
+
+  const handleGeoError = (err) => {
+    if (gpsBadge) {
+      if (err && err.code === 1) {
+        gpsBadge.textContent = "⚠️ נדרשת הרשאת מיקום (HTTPS / הגדרות)";
+      } else {
+        gpsBadge.textContent = "⚠️ לא זוהה GPS (מציג מרכז יישוב)";
       }
-      renderMapMarkers();
+    }
+    renderMapMarkers();
+  };
+
+  if (gpsBadge && centerOnSuccess) {
+    gpsBadge.textContent = "📡 מאתר מיקום...";
+  }
+
+  // First try high-accuracy GPS; on timeout/unavailable, fall back to standard accuracy (Wi-Fi/Cell)
+  navigator.geolocation.getCurrentPosition(
+    applyPosition,
+    (err) => {
+      if (err && err.code === 1) {
+        handleGeoError(err);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        applyPosition,
+        handleGeoError,
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
     },
-    () => {
-      renderMapMarkers();
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
   );
 }
 
@@ -2439,8 +2472,8 @@ function bindUiEvents() {
 
   // 4. Locate Me GPS button
   document.getElementById("btn-locate-me")?.addEventListener("click", () => {
-    initGeolocation();
-    if (state.map) {
+    initGeolocation(true);
+    if (state.map && state.userGps.detected) {
       state.map.setView([state.userGps.lat, state.userGps.lng], 16, { animate: true });
     }
   });
@@ -2963,6 +2996,17 @@ async function handleAuthSessionChange(session) {
   await loadAllSupabaseData(false);
 }
 
+function getOAuthErrorFromUrl() {
+  const searchParams = new URLSearchParams(window.location.search || "");
+  const hashStr = (window.location.hash || "").replace(/^#/, "");
+  const hashParams = new URLSearchParams(hashStr);
+  const error = searchParams.get("error") || hashParams.get("error");
+  const errorDesc =
+    searchParams.get("error_description") || hashParams.get("error_description");
+  if (!error && !errorDesc) return null;
+  return errorDesc || error;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => { });
@@ -2970,8 +3014,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   bindUiEvents();
 
-  // Subscribe to auth state changes (Google OAuth / Magic Link callback / Sign-in / Sign-out)
+  const urlAuthError = getOAuthErrorFromUrl();
+  if (urlAuthError) {
+    const errorBox = document.getElementById("auth-error-box");
+    if (errorBox) {
+      errorBox.textContent = `שגיאת התחברות: ${urlAuthError}`;
+      errorBox.classList.remove("hidden");
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // Wait for Supabase Auth to finish parsing URL hash/code and restoring session
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    await handleAuthSessionChange(data?.session || null);
+  } catch (err) {
+    console.error("Failed to check Supabase Auth session:", err);
+    const errorBox = document.getElementById("auth-error-box");
+    if (errorBox && err?.message) {
+      errorBox.textContent = `שגיאת התחברות: ${err.message}`;
+      errorBox.classList.remove("hidden");
+    }
+    showAuthGateScreen();
+  }
+
+  // Subscribe to subsequent auth state changes (Google OAuth / Magic Link / Sign-in / Sign-out)
   supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "INITIAL_SESSION") return;
     if (event === "TOKEN_REFRESHED" && session) {
       state.session = session;
       state.authUser = session.user;
@@ -2980,14 +3050,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     handleAuthSessionChange(session);
   });
-
-  // Check current Supabase Auth session on startup (`supabase.auth.getSession()`)
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    await handleAuthSessionChange(data?.session || null);
-  } catch (err) {
-    console.error("Failed to check Supabase Auth session:", err);
-    showAuthGateScreen();
-  }
 });

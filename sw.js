@@ -1,4 +1,4 @@
-const CACHE_NAME = "compostherapy-v2-pwa-2";
+const CACHE_NAME = "compostherapy-v2-pwa-3";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
