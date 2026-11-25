@@ -4,122 +4,21 @@
  */
 
 const SUPABASE_PROJECT_URL = "https://ffuwqwjtjmesfydlgjlx.supabase.co";
-const SUPABASE_URL = `${SUPABASE_PROJECT_URL}/rest/v1/`;
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmdXdxd2p0am1lc2Z5ZGxnamx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5MzAyNjQsImV4cCI6MjExMDUwNjI2NH0.Y4VTTThkp3Z00rcpWlN-AmBLFcgJrfSCb51GsfJ1fO4";
 
-// Initialize official Supabase JS Client (if loaded via CDN) + Built-in Auth fallback
-const supabaseClient =
-  typeof window !== "undefined" &&
-    window.supabase &&
-    typeof window.supabase.createClient === "function"
-    ? window.supabase.createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    })
-    : createFallbackSupabaseAuthClient();
-
-function createFallbackSupabaseAuthClient() {
-  const STORAGE_KEY = "sb-ffuwqwjtjmesfydlgjlx-auth-token";
-  return {
-    auth: {
-      async getSession() {
-        // Check URL hash for magic link tokens (#access_token=...&refresh_token=...)
-        if (window.location.hash && window.location.hash.includes("access_token=")) {
-          const params = new URLSearchParams(window.location.hash.substring(1));
-          const access_token = params.get("access_token");
-          const refresh_token = params.get("refresh_token") || "";
-          if (access_token) {
-            const userRes = await fetch(`${SUPABASE_PROJECT_URL}/auth/v1/user`, {
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${access_token}`
-              }
-            });
-            if (userRes.ok) {
-              const user = await userRes.json();
-              const session = { access_token, refresh_token, user };
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-              window.history.replaceState({}, document.title, window.location.pathname);
-              return { data: { session }, error: null };
-            }
-          }
-        }
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) return { data: { session: null }, error: null };
-          const session = JSON.parse(raw);
-          return { data: { session }, error: null };
-        } catch {
-          return { data: { session: null }, error: null };
-        }
-      },
-      async signInWithOtp({ email, options }) {
-        const res = await fetch(`${SUPABASE_PROJECT_URL}/auth/v1/otp`, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            email,
-            create_user: true,
-            gotrue_meta_security: {},
-            ...(options?.emailRedirectTo ? { redirect_to: options.emailRedirectTo } : {})
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ msg: "שגיאה בשליחת קישור הכניסה" }));
-          return { data: null, error: new Error(err.error_description || err.msg || err.message || "שגיאה בשליחת המייל") };
-        }
-        return { data: {}, error: null };
-      },
-      async signInWithOAuth({ provider, options }) {
-        const redirectTo = encodeURIComponent(options?.redirectTo || window.location.origin);
-        window.location.href = `${SUPABASE_PROJECT_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${redirectTo}`;
-        return { data: {}, error: null };
-      },
-      async signOut() {
-        localStorage.removeItem(STORAGE_KEY);
-        return { error: null };
-      },
-      onAuthStateChange() {
-        return { data: { subscription: { unsubscribe() { } } } };
-      }
-    },
-    from(table) {
-      return {
-        async insert(payload) {
-          try {
-            const data = await sbInsert(table, payload);
-            return { data, error: null };
-          } catch (err) {
-            return { data: null, error: err };
-          }
-        },
-        update(payload) {
-          return {
-            async eq(column, value) {
-              try {
-                const data = await sbPatch(
-                  table,
-                  `${encodeURIComponent(column)}=eq.${encodeURIComponent(value)}`,
-                  payload
-                );
-                return { data, error: null };
-              } catch (err) {
-                return { data: null, error: err };
-              }
-            }
-          };
-        }
-      };
-    }
-  };
+// Initialize official @supabase/supabase-js v2 client
+if (!window.supabase || typeof window.supabase.createClient !== "function") {
+  throw new Error("Supabase JS SDK v2 failed to load from CDN.");
 }
+
+const supabase = window.supabase.createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 const BASE_COORDS = [32.2225, 34.9915]; // Tzur Yigal - Kochav Yair center
 
@@ -263,64 +162,6 @@ const state = {
   reportPinLat: null,
   reportPinLng: null
 };
-
-// ============================================================================
-// SUPABASE REST API CLIENT (Uses Authenticated Session Token when available)
-// ============================================================================
-
-function getSupabaseHeaders(extra = {}) {
-  const bearerToken = state.session?.access_token || SUPABASE_ANON_KEY;
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${bearerToken}`,
-    "Content-Type": "application/json",
-    ...extra
-  };
-}
-
-async function sbSelect(table, query = "select=*") {
-  const url = `${SUPABASE_URL}${table}?${query}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: getSupabaseHeaders(),
-    cache: "no-store"
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Supabase GET ${table} (${res.status}): ${errText}`);
-  }
-  return await res.json();
-}
-
-async function sbInsert(table, payload) {
-  const url = `${SUPABASE_URL}${table}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: getSupabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Supabase POST ${table} (${res.status}): ${errText}`);
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
-
-async function sbPatch(table, filterQuery, payload) {
-  const url = `${SUPABASE_URL}${table}?${filterQuery}`;
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: getSupabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Supabase PATCH ${table} (${res.status}): ${errText}`);
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
 
 // ============================================================================
 // FIELD NORMALIZERS & EXPIRATION / MULTI-SELECT HELPERS
@@ -680,7 +521,9 @@ async function resolveAuthenticatedUserProfile(authUser, allUsers, allUnits) {
     }
     if (Object.keys(syncPatch).length > 0) {
       Object.assign(profile, syncPatch);
-      sbPatch("users", `id=eq.${encodeURIComponent(profile.id)}`, syncPatch).catch(() => { });
+      supabase.from("users").update(syncPatch).eq("id", profile.id).then(({ error }) => {
+        if (error) console.error("Profile sync error:", error);
+      });
     }
   }
 
@@ -699,8 +542,11 @@ async function resolveAuthenticatedUserProfile(authUser, allUsers, allUnits) {
     newProfilePayload.rank_title = "♻️ נאמן מיחזור";
 
     try {
-      const inserted = await sbInsert("users", newProfilePayload);
-      if (Array.isArray(inserted) && inserted[0]) {
+      const { data: inserted, error: insertError } = await supabase
+        .from("users")
+        .insert(newProfilePayload)
+        .select();
+      if (!insertError && Array.isArray(inserted) && inserted[0]) {
         profile = inserted[0];
         state.users.push(profile);
       }
@@ -834,19 +680,35 @@ async function loadAllSupabaseData(silent = false) {
   try {
     const nowIso = new Date().toISOString();
 
-    const activeDropsPromise = sbSelect("active_resource_drops", "select=*").catch(() =>
-      sbSelect(
-        "resource_drops",
-        `select=*&status=in.(open,claimed)&expires_at=gt.${encodeURIComponent(nowIso)}`
-      ).catch(() => null)
-    );
+    const selectTable = async (table) => {
+      const { data, error } = await supabase.from(table).select("*");
+      if (error) {
+        console.error(`Supabase select ${table} error:`, error);
+        return [];
+      }
+      return Array.isArray(data) ? data : [];
+    };
+
+    const activeDropsPromise = supabase
+      .from("active_resource_drops")
+      .select("*")
+      .then(async ({ data, error }) => {
+        if (!error && Array.isArray(data)) return data;
+        const fallback = await supabase
+          .from("resource_drops")
+          .select("*")
+          .in("status", ["open", "claimed"])
+          .gt("expires_at", nowIso);
+        return !fallback.error && Array.isArray(fallback.data) ? fallback.data : null;
+      })
+      .catch(() => null);
 
     const [users, units, resourceDrops, activeDropsFromView, weighingLogs] = await Promise.all([
-      sbSelect("users", "select=*").catch(() => []),
-      sbSelect("units", "select=*").catch(() => []),
-      sbSelect("resource_drops", "select=*").catch(() => []),
+      selectTable("users"),
+      selectTable("units"),
+      selectTable("resource_drops"),
       activeDropsPromise,
-      sbSelect("weighing_logs", "select=*").catch(() => [])
+      selectTable("weighing_logs")
     ]);
 
     state.users = Array.isArray(users) ? users : [];
@@ -2297,7 +2159,7 @@ async function updateUnitInSupabase(unitId, patchFields, customSuccessMsg = null
   if (unit) Object.assign(unit, patchFields);
   renderAll();
 
-  const { error } = await supabaseClient
+  const { error } = await supabase
     .from("units")
     .update(patchFields)
     .eq("unit_id", cleanUnitId);
@@ -2354,7 +2216,7 @@ window.handleDropAction = async function (dropId, action, rejectionReason = null
   Object.assign(drop, payload);
   renderAll();
 
-  const { error } = await supabaseClient
+  const { error } = await supabase
     .from("resource_drops")
     .update(payload)
     .eq("id", dropId);
@@ -2381,7 +2243,7 @@ window.handleDropAction = async function (dropId, action, rejectionReason = null
       rank_title: nextRankInfo.rankTitle
     };
     Object.assign(reporter, userPatch);
-    const { error: userErr } = await supabaseClient
+    const { error: userErr } = await supabase
       .from("users")
       .update(userPatch)
       .eq("id", reporter.id);
@@ -2492,7 +2354,7 @@ function bindUiEvents() {
     if (googleBtn) googleBtn.disabled = true;
 
     try {
-      const { error } = await supabaseClient.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: window.location.origin
@@ -2528,7 +2390,7 @@ function bindUiEvents() {
     if (submitText) submitText.textContent = "שולח קישור כניסה...";
 
     try {
-      const { error } = await supabaseClient.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
           emailRedirectTo: window.location.origin
@@ -2555,7 +2417,7 @@ function bindUiEvents() {
   // 2. Sign Out Button (`supabase.auth.signOut()`)
   document.getElementById("btn-sign-out")?.addEventListener("click", async () => {
     try {
-      await supabaseClient.auth.signOut();
+      await supabase.auth.signOut();
     } catch (err) {
       console.error("Error signing out:", err);
     }
@@ -2871,7 +2733,7 @@ function bindUiEvents() {
         );
       }
 
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from("resource_drops")
         .insert(payload);
 
@@ -2971,7 +2833,10 @@ function bindUiEvents() {
     }
 
     try {
-      await sbInsert("weighing_logs", payload);
+      const { error: weighErr } = await supabase
+        .from("weighing_logs")
+        .insert(payload);
+      if (weighErr) throw weighErr;
       if (kitchenInput) kitchenInput.value = "";
       if (gardenInput) gardenInput.value = "";
       flashOwnerSaveFeedback();
@@ -3074,15 +2939,26 @@ function bindUiEvents() {
 // BOOTSTRAP PWA, SUPABASE AUTH SESSION CHECK & REAL-TIME SYNC
 // ============================================================================
 
+let lastHandledAuthAccessToken = null;
+
 async function handleAuthSessionChange(session) {
+  const nextToken = session?.access_token || null;
+  if (session && session.user && nextToken && nextToken === lastHandledAuthAccessToken) {
+    state.session = session;
+    state.authUser = session.user;
+    return;
+  }
+
   state.session = session || null;
   state.authUser = session?.user || null;
 
   if (!state.session || !state.authUser) {
+    lastHandledAuthAccessToken = null;
     showAuthGateScreen();
     return;
   }
 
+  lastHandledAuthAccessToken = nextToken;
   showAuthenticatedAppShell();
   await loadAllSupabaseData(false);
 }
@@ -3094,17 +2970,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   bindUiEvents();
 
+  // Subscribe to auth state changes (Google OAuth / Magic Link callback / Sign-in / Sign-out)
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "TOKEN_REFRESHED" && session) {
+      state.session = session;
+      state.authUser = session.user;
+      lastHandledAuthAccessToken = session.access_token || null;
+      return;
+    }
+    handleAuthSessionChange(session);
+  });
+
   // Check current Supabase Auth session on startup (`supabase.auth.getSession()`)
   try {
-    const { data } = await supabaseClient.auth.getSession();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
     await handleAuthSessionChange(data?.session || null);
   } catch (err) {
     console.error("Failed to check Supabase Auth session:", err);
     showAuthGateScreen();
   }
-
-  // Subscribe to auth state changes (Magic Link callback / Sign-in / Sign-out)
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    handleAuthSessionChange(session);
-  });
 });
